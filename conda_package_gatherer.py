@@ -5,8 +5,8 @@ from typing import List, Dict, Union, Optional, Tuple
 import json
 import os
 import yaml
-import aiohttp
-import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import requests
 import logging
 import shutil
 import subprocess
@@ -16,27 +16,26 @@ import sys
 logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
 
 
-async def download_and_save_package(session: aiohttp.ClientSession, url: str, package_name: str,
-                                    download_directory: str) -> None:
+def download_and_save_package(url: str, package_name: str,
+                              download_directory: str) -> None:
     """
 
-    download the conda pacakge and save it to a specified directory
+    download the conda package and save it to a specified directory
 
-    :param session: aiohttp client session
     :param url: url with the conda package
     :param package_name: conda package name
     :param download_directory: the directory to save packages to
     :return: None
     """
     logging.info(f'fetching {package_name} from {url}')
-    data = await session.get(url)
-    file = await data.read()
+    data = requests.get(url)
+    file = data.content
     with open(os.path.join(download_directory, package_name), 'wb') as pkg:
         pkg.write(file)
     logging.info(f'package {package_name} saved to {download_directory}')
 
 
-async def fetch_packages(urls: Dict[str, str], download_directory: Optional[str]) -> None:
+def fetch_packages(urls: Dict[str, str], download_directory: Optional[str]) -> None:
     """
 
     fetch all conda packages asynchronously, limiting the number fetched at one time using a semaphore
@@ -45,10 +44,9 @@ async def fetch_packages(urls: Dict[str, str], download_directory: Optional[str]
     :param download_directory: the directory to save packages to
     :return: None
     """
-    async with asyncio.Semaphore(15):
-        async with aiohttp.ClientSession() as session:
-            await asyncio.gather(*[download_and_save_package(session, u, p, download_directory)
-                                   for u, p in urls.items()])
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        for u, p in urls.items():
+            executor.submit(download_and_save_package, u, p, download_directory)
 
 
 def solve_for_packages(packages: List[str]) -> Tuple[IndexedSet, IndexedSet]:
@@ -106,8 +104,7 @@ def generate_offline_install_package(packages: Union[Dict[str, List], str], pack
         packages_to_fetch = {pkg.url: pkg.fn for pkg in to_be_installed.item_list}
         conda_package_listing = [f'conda/{v}' for v in packages_to_fetch.values()]
         logging.info(f'need the following conda packages: {packages_to_fetch}')
-        asyncio.get_event_loop().run_until_complete(fetch_packages(packages_to_fetch,
-                                                                   download_directory=conda_packages_location))
+        fetch_packages(packages_to_fetch, download_directory=conda_packages_location)
     if pip_dependencies:
         pip_packages_location = os.path.join(install_path, 'pip')
         os.makedirs(pip_packages_location, exist_ok=exist_ok)
