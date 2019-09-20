@@ -88,8 +88,12 @@ def generate_offline_install_package(packages: Union[Dict[str, List], str], pack
         with open(packages) as pkgs:
             data = yaml.safe_load(pkgs)
         packages = data['dependencies']
-        # maybe do something with pip installs too?
-        pip_dependencies = packages.pop('pip')
+        pip_dependencies = None
+        for p in reversed(packages):
+            if isinstance(p, dict) and p.get('pip') is not None:
+                pip_dependencies = p.pop('pip')
+                packages.remove(p)
+                break
         conda_dependencies = packages
     else:
         conda_dependencies = packages.get('conda')
