@@ -140,8 +140,3 @@ def generate_offline_install_package(packages: Union[Dict[str, List], str], pack
             up.write(f'{command_prepend}pip install --no-index --find-links=pip/downloaded -r pip/requirements.txt\n')
     if compress:
         shutil.make_archive(install_path, 'zip', install_path)
-
-
-if __name__ == "__main__":
-    # preamble = r'call C:\Users\astro\Anaconda3\Scripts\activate.bat C:\Users\astro\Anaconda3\envs\conda_testing2'
-    generate_offline_install_package('environment.yaml')
